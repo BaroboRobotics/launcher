@@ -1,0 +1,10 @@
+module LauncherConfig where
+
+browserExecutablePath :: FilePath
+browserExecutablePath = "@CFG_BROWSER_EXECUTABLE_PATH@"
+
+contentPath :: FilePath
+contentPath = "@CFG_CONTENT_PATH@"
+
+port :: String
+port = "@CFG_PORT@"

@@ -1,0 +1,23 @@
+name:                launcher
+version:             0.0.1
+-- synopsis:            
+-- description:         
+homepage:            www.barobo.com
+author:              Barobo
+maintainer:          david@barobo.com
+-- copyright:           
+-- category:            
+build-type:          Custom
+cabal-version:       >=1.8
+extra-source-files:  win32/*
+
+executable @LINKBOT_LABS_EXE_NAME@
+  main-is:             @LINKBOT_LABS_MAIN_FILE@
+  ghc-options:         -threaded
+  if os(windows)
+    ld-options:        icon.o
+  other-modules:       BetterNetwork
+  hs-source-dirs:      @PROJECT_SOURCE_DIR@, .
+  build-depends:       base >= 4.6, process >= 1.2, text, directory,
+                       filepath, http-types, warp, wai, transformers, mtl,
+                       network, mime-types, errors > 1

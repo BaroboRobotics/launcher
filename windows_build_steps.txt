@@ -1,0 +1,6 @@
+0. Fresh install of haskell platform 2013.2.0.0 for Windows
+1. cabal update
+2. "cabal install cabal-install" installs in AppData/Roaming/cabal/bin, but 
+   previous cabal still lives in haskell package directory in C:/Program Files.
+   Modify bashrc path(s) to point to local cabal
+3. Install warp, "cabal install warp"
