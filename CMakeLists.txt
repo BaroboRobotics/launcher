@@ -23,7 +23,9 @@ configure_file(LauncherConfig.hs.in LauncherConfig.hs @ONLY)
 
 # If we're on Windows, set the cabal command up so that it spawns with GHC's
 # MinGW toolchain in front of its PATH.
-if(CMAKE_HOST_WIN32)
+if(NOT CMAKE_HOST_WIN32)
+  set(CABAL_ESCAPED ${CABAL})
+else()
   if(NOT DEFINED GHC_ROOT)
     if(DEFINED ENV{GHC_ROOT})
       set(GHC_ROOT "$ENV{GHC_ROOT}")
