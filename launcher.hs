@@ -1,61 +1,68 @@
 {-# LANGUAGE OverloadedStrings #-}
 -- vim: sw=4
 
-import Control.Error
-import Control.Exception
-import Control.Monad (join)
-import Network.Wai
-import BetterNetwork
+import Control.Applicative ((<$>))
+import Control.Error (Script, runScript, scriptIO, headDef, left, right, tryIO, eitherT)
+import Network.Wai (pathInfo, Application, responseFile)
+import BetterNetwork (PortNumber, Socket, socketPort, withSockets, getListeningLocalSocket)
 import qualified Network.Wai.Handler.Warp as Warp
-import Network.HTTP.Types.Status
+import Network.HTTP.Types.Status (status200)
 import Network.Mime (defaultMimeLookup)
 import System.FilePath ((</>))
-import Control.Concurrent
+import Control.Concurrent.Async (Async, withAsync, waitEither_)
 import qualified Data.Text as T
-import System.IO.Unsafe
-import System.IO.Error (ioeGetErrorString)
-import System.Process
-import System.Environment
-import System.Exit
+import System.Directory (doesFileExist, doesDirectoryExist)
+import System.Process (callProcess)
+import System.Environment (getArgs)
 import qualified LauncherConfig as Config
 
--- This stuff is basically just copied from
--- http://www.haskell.org/ghc/docs/latest/html/libraries/base/Control-Concurrent.html
+-- Gracefully exit by printing the first error.
+main = runScriptWithSockets $ do
+    browser <- browserErr Config.browserExecutablePath
+    path' <- scriptIO $ headDef Config.contentPath <$> getArgs
+    content <- contentErr path'
 
-trackedChildren :: MVar [MVar ()]
-trackedChildren = unsafePerformIO (newMVar [])
-
-waitForTrackedChildren :: IO ()
-waitForTrackedChildren = do
-  cs <- takeMVar trackedChildren
-  case cs of
-    []   -> return ()
-    m:ms -> do
-      putMVar trackedChildren ms
-      takeMVar m
-      waitForTrackedChildren
-
-forkTrackedChild :: IO () -> IO ThreadId
-forkTrackedChild io = do
-  mvar <- newEmptyMVar
-  childs <- takeMVar trackedChildren
-  putMVar trackedChildren (mvar:childs)
-  forkFinally io (\_ -> putMVar mvar ())
+    -- Henceforth, only IO Exceptions will catch us up; thus one scriptIO
+    -- to catch 'em all.
+    scriptIO $ do
+        (port, withAsyncSrv) <- spawnServer content
+        withAsyncSrv $ \asyncSrv -> do
+        withAsync (runBrowser port) $ \asyncBrowser -> do
+        waitEither_ asyncSrv asyncBrowser
+  where
+    browserErr = pathErr doesFileExist "Could not find browser: "
+    contentErr = pathErr doesDirectoryExist "Could not find content: "
 
 
+-- | 'Script' is the nicest type for the logic, but withSockets is applied
+-- to IO. So, we unwrap the Script, apply withSockets, and then wrap up any
+-- exceptions *it* may throw,
+runScriptWithSockets :: Script a -> IO a
+runScriptWithSockets = runScript . scriptIO . withSockets . runScript {- . lol . wat -}
 
-linkbotLabs :: FilePath -> IO ()
-linkbotLabs directory = withSocketsDo $ do
-  (port, serverThread) <- forkServer directory
-  browserThread <- forkTrackedChild $ startBrowser port
-  return ()
+-- Checks things about paths. Can fail because the check failed, or because
+-- the RealWorld failed.
+pathErr :: (FilePath -> IO Bool)
+        -> String
+        -> FilePath
+        -> Script FilePath
+pathErr test err path = do
+    b <- scriptIO $ test path
+    if b
+       then right path
+       else left $ err ++ show path
 
-forkServer :: FilePath -> IO (PortNumber, ThreadId)
-forkServer dir = do
+--
+-- -- Server stuff --
+--
+
+-- Using continuations, since that's what withAsync uses.
+spawnServer :: FilePath
+            -> IO (PortNumber, ((Async () -> IO b) -> IO b))
+spawnServer dir = do
   sock <- (eitherT error return) $ getListeningLocalSocket $ Config.port
   actualPort <- socketPort sock
-  threadId <- forkIO $ startServer sock dir
-  return (actualPort, threadId)
+  return (actualPort, withAsync $ startServer sock dir)
 
 startServer :: Socket -> FilePath -> IO ()
 startServer sock dir = do
@@ -69,18 +76,10 @@ startServer sock dir = do
         func $ responseFile status200 [mimeHeader] path Nothing
     settings = Warp.defaultSettings
 
+--
+-- -- Browser stuff --
+--
 
-startBrowser :: PortNumber -> IO ()
-startBrowser port = do
-    putStrLn $ "Starting browser with url: " ++ url
-    exitCode <- rawSystem Config.browserExecutablePath [url]
-    if exitCode == ExitSuccess 
-        then 
-            return ()
-        else 
-            putStrLn $ "Error: Could not find browser at " ++ Config.browserExecutablePath
+runBrowser :: PortNumber -> IO ()
+runBrowser port = callProcess Config.browserExecutablePath [url]
   where url = "http://localhost:" ++ show port ++ "/index.html"
-
-main = do
-  contentPath <- fmap (headDef Config.contentPath) getArgs
-  linkbotLabs contentPath
