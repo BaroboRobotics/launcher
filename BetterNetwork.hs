@@ -9,6 +9,7 @@ module BetterNetwork (
   , setSocketOption
   , bind
   , listen
+  , withSockets
 ) where
 
 import Control.Error
@@ -16,10 +17,15 @@ import Control.Exception
 
 import System.IO.Error (ioeGetErrorString)
 
-import Network.Socket hiding (getAddrInfo, socket, bind, listen, setSocketOption)
+import Network.Socket hiding (getAddrInfo, socket, bind, listen, setSocketOption, withSocketsDo)
 import qualified Network.Socket as N
 
 type SockOpts = [(SocketOption, Int)]
+
+-- | Better name for 'withSocketsDo', which is usually followed by "$ do".
+-- That is, dare I say, doo doo.
+withSockets :: IO a -> IO a
+withSockets = N.withSocketsDo
 
 -- | Given a service (port), return a listening socket on the loopback
 -- device.
