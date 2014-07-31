@@ -2,7 +2,7 @@
 -- vim: sw=4
 
 import Control.Applicative ((<$>))
-import Control.Error (Script, runScript, scriptIO, headDef, left, right, tryIO, eitherT)
+import Control.Error (Script, runScript, scriptIO, headDef, left, right, tryIO, eitherT, runEitherT)
 import Network.Wai (pathInfo, Application, responseFile)
 import BetterNetwork (PortNumber, Socket, socketPort, withSockets, getListeningLocalSocket)
 import qualified Network.Wai.Handler.Warp as Warp
@@ -14,17 +14,18 @@ import qualified Data.Text as T
 import System.Directory (doesFileExist, doesDirectoryExist)
 import System.Process (callProcess)
 import System.Environment (getArgs)
+import System.Exit (exitFailure)
 import qualified LauncherConfig as Config
 
 -- Gracefully exit by printing the first error.
-main = runScriptWithSockets $ do
+main = logScript "linkbotlog.txt" $ do
     browser <- browserErr Config.browserExecutablePath
     path' <- scriptIO $ headDef Config.contentPath <$> getArgs
     content <- contentErr path'
 
     -- Henceforth, only IO Exceptions will catch us up; thus one scriptIO
     -- to catch 'em all.
-    scriptIO $ do
+    scriptIO $ withSockets $ do
         (port, withAsyncSrv) <- spawnServer content
         withAsyncSrv $ \asyncSrv -> do
         withAsync (runBrowser port) $ \asyncBrowser -> do
@@ -33,12 +34,14 @@ main = runScriptWithSockets $ do
     browserErr = pathErr doesFileExist "Could not find browser: "
     contentErr = pathErr doesDirectoryExist "Could not find content: "
 
-
--- | 'Script' is the nicest type for the logic, but withSockets is applied
--- to IO. So, we unwrap the Script, apply withSockets, and then wrap up any
--- exceptions *it* may throw,
-runScriptWithSockets :: Script a -> IO a
-runScriptWithSockets = runScript . scriptIO . withSockets . runScript {- . lol . wat -}
+logScript :: FilePath -> Script a -> IO a
+logScript log s = do
+    e <- runEitherT s
+    case e of
+        Left  e -> do
+            writeFile log e
+            exitFailure
+        Right a -> return a
 
 -- Checks things about paths. Can fail because the check failed, or because
 -- the RealWorld failed.
