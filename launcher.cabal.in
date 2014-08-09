@@ -16,6 +16,7 @@ executable @LINKBOT_LABS_EXE_NAME@
   ghc-options:         -threaded
   if os(windows)
     ld-options:        icon.o
+    ghc-options:       -threaded -optl-mwindows
   other-modules:       BetterNetwork
   hs-source-dirs:      @PROJECT_SOURCE_DIR@, .
   build-depends:       async, base >= 4.6, process >= 1.2, text, directory,
