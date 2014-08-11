@@ -15,7 +15,7 @@ if(CMAKE_HOST_WIN32 AND NOT DEFINED GHC_ROOT)
 endif()
 
 if(CMAKE_HOST_WIN32)
-  set(LAUNCHER_BUILD_PATH "${GHC_ROOT}/bin:${GHC_ROOT}/mingw/bin:$ENV{PATH}")
+  set(LAUNCHER_BUILD_PATH "${GHC_ROOT}/bin;${GHC_ROOT}/mingw/bin;$ENV{PATH}")
 else()
   set(LAUNCHER_BUILD_PATH $ENV{PATH})
 endif()
