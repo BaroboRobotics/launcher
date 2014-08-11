@@ -1,5 +1,5 @@
 name:                launcher
-version:             0.0.1
+version:             @PROJECT_VERSION@
 -- synopsis:            
 -- description:         
 homepage:            www.barobo.com
