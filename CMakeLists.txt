@@ -20,6 +20,7 @@ if(CMAKE_HOST_WIN32)
   set(LAUNCHER_BUILD_PATH "${GHC_ROOT}/bin;${GHC_ROOT}/mingw/bin;$ENV{PATH}")
 else()
   set(LAUNCHER_BUILD_PATH $ENV{PATH})
+  file(TO_CMAKE_PATH "${LAUNCHER_BUILD_PATH}" LAUNCHER_BUILD_PATH)
 endif()
 
 set(LINKBOT_LABS_EXE_NAME "LinkbotLabs")
@@ -45,7 +46,7 @@ endif()
 # Require ghc
 find_program(GHC ghc PATHS ${LAUNCHER_BUILD_PATH} NO_DEFAULT_PATH)
 if(NOT GHC)
-  message(FATAL_ERROR "Oh dogg where is GHC?")
+  message(FATAL_ERROR "Oh dogg where is GHC? Not in ${LAUNCHER_BUILD_PATH}")
 endif()
 
 # Copy configuration files to build dir
@@ -58,30 +59,34 @@ endif()
 file(WRITE ${PROJECT_BINARY_DIR}/build.sh
 "set -e
 
-winpath () {
-  if uname -a | grep -qi msys; then
-    echo \"$1\" | sed -e 's#;#:#g; s#\\(^\\|:\\)\\([A-Z]\\):#\\1/\\2#ig; s#\\\\#/#g'
-  else
-    echo \"$1\"
-  fi
+fromCmakePath () {
+  echo \"$1\" | sed -e 's#;#:#g; s#\\(^\\|:\\)\\([A-Za-z]\\):#\\1/\\2#g; s#\\\\#/#g'
 }
 
-export PATH=\"$(winpath '@LAUNCHER_BUILD_PATH@')\"
+export PATH=\"$(fromCmakePath '@LAUNCHER_BUILD_PATH@')\"
 
 @CABAL@ sandbox --sandbox='@CABAL_SANDBOX@' init
 @CABAL@ install -j"
 )
 
 #
-# DEFINE BUILD RULES
+# BUILD
 #
 
 add_custom_target(RUN_CABAL ALL "sh" "build.sh")
 
 #
-# DEFINE INSTALL RULES
+# STAGE
 #
+
+if(WIN32)
+  set(dest .)
+elseif(APPLE)
+  set(dest Contents/MacOS)
+else()
+  set(dest bin)
+endif()
 
 install(PROGRAMS
   "${PROJECT_BINARY_DIR}/${CABAL_SANDBOX}/bin/${LINKBOT_LABS_EXE_NAME}${CMAKE_EXECUTABLE_SUFFIX}"
-  DESTINATION .)
+  DESTINATION ${dest})
