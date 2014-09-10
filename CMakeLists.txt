@@ -65,8 +65,8 @@ fromCmakePath () {
 
 export PATH=\"$(fromCmakePath '@LAUNCHER_BUILD_PATH@')\"
 
-@CABAL@ sandbox --sandbox='@CABAL_SANDBOX@' init
-@CABAL@ install -j"
+\"@CABAL@\" sandbox --sandbox='@CABAL_SANDBOX@' init
+\"@CABAL@\" install -j"
 )
 
 #
