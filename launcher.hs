@@ -19,9 +19,9 @@ import qualified LauncherConfig as Config
 
 -- Gracefully exit by printing the first error.
 main = logScript "linkbotlog.txt" $ do
-    browser <- browserErr Config.browserExecutablePath
+    browser <- processCfg doesFileExist Config.browserExecutablePath
     path' <- scriptIO $ headDef Config.contentPath <$> getArgs
-    content <- contentErr path'
+    content <- processCfg doesDirectoryExist path'
 
     -- Henceforth, only IO Exceptions will catch us up; thus one scriptIO
     -- to catch 'em all.
@@ -30,25 +30,21 @@ main = logScript "linkbotlog.txt" $ do
         withAsyncSrv $ \asyncSrv -> do
         withAsync (runBrowser browser port) $ \asyncBrowser -> do
         waitEither_ asyncSrv asyncBrowser
-  where
 
-browserErr :: FilePath -> Script FilePath
-browserErr orig = do
-    browser <- mungeBrowser orig
-    pathErr doesFileExist "Could not find browser: " browser
+-- TODO combine these two?
+processCfg test path = do
+    out <- mungePath path
+    pathErr test "Could not find " out
   where
-    mungeBrowser b = scriptIO $ do
-        path <- getExecutablePath
-        return $ replaceFileName path b
+    mungePath b = scriptIO $ do
+        epath <- getExecutablePath
+        return $ replaceFileName epath b
 
-contentErr :: FilePath -> Script FilePath
-contentErr orig = do
-    content <- mungeContent orig
-    pathErr doesDirectoryExist "Could not find content: " content
-  where
-    mungeContent b = scriptIO $ do
-        path <- getExecutablePath
-        return $ replaceFileName path b
+    pathErr test err path = do
+        b <- scriptIO $ test path
+        if b
+           then right path
+           else left $ err ++ show path
 
 logScript :: FilePath -> Script a -> IO a
 logScript log s = do
@@ -59,17 +55,6 @@ logScript log s = do
             exitFailure
         Right a -> return a
 
--- Checks things about paths. Can fail because the check failed, or because
--- the RealWorld failed.
-pathErr :: (FilePath -> IO Bool)
-        -> String
-        -> FilePath
-        -> Script FilePath
-pathErr test err path = do
-    b <- scriptIO $ test path
-    if b
-       then right path
-       else left $ err ++ show path
 
 --
 -- -- Server stuff --
