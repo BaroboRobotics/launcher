@@ -11,7 +11,7 @@ build-type:          Custom
 cabal-version:       >=1.8
 extra-source-files:  win32/*
 
-executable @LINKBOT_LABS_EXE_NAME@
+executable "@LINKBOT_LABS_EXE_NAME@"
   main-is:             @LINKBOT_LABS_MAIN_FILE@
   ghc-options:         -threaded
   if os(windows)

@@ -8,31 +8,43 @@ import BetterNetwork (PortNumber, Socket, socketPort, withSockets, getListeningL
 import qualified Network.Wai.Handler.Warp as Warp
 import Network.HTTP.Types.Status (status200)
 import Network.Mime (defaultMimeLookup)
-import System.FilePath ((</>))
 import Control.Concurrent.Async (Async, withAsync, waitEither_)
 import qualified Data.Text as T
 import System.Directory (doesFileExist, doesDirectoryExist)
 import System.Process (callProcess)
-import System.Environment (getArgs)
+import System.Environment (getArgs, getExecutablePath)
 import System.Exit (exitFailure)
+import System.FilePath ((</>), replaceFileName)
 import qualified LauncherConfig as Config
 
 -- Gracefully exit by printing the first error.
 main = logScript "linkbotlog.txt" $ do
-    browser <- browserErr Config.browserExecutablePath
+    browser <- processCfg doesFileExist Config.browserExecutablePath
     path' <- scriptIO $ headDef Config.contentPath <$> getArgs
-    content <- contentErr path'
+    content <- processCfg doesDirectoryExist path'
 
     -- Henceforth, only IO Exceptions will catch us up; thus one scriptIO
     -- to catch 'em all.
     scriptIO $ withSockets $ do
         (port, withAsyncSrv) <- spawnServer content
         withAsyncSrv $ \asyncSrv -> do
-        withAsync (runBrowser port) $ \asyncBrowser -> do
+        withAsync (runBrowser browser port) $ \asyncBrowser -> do
         waitEither_ asyncSrv asyncBrowser
+
+-- TODO combine these two?
+processCfg test path = do
+    out <- mungePath path
+    pathErr test "Could not find " out
   where
-    browserErr = pathErr doesFileExist "Could not find browser: "
-    contentErr = pathErr doesDirectoryExist "Could not find content: "
+    mungePath b = scriptIO $ do
+        epath <- getExecutablePath
+        return $ replaceFileName epath b
+
+    pathErr test err path = do
+        b <- scriptIO $ test path
+        if b
+           then right path
+           else left $ err ++ show path
 
 logScript :: FilePath -> Script a -> IO a
 logScript log s = do
@@ -43,17 +55,6 @@ logScript log s = do
             exitFailure
         Right a -> return a
 
--- Checks things about paths. Can fail because the check failed, or because
--- the RealWorld failed.
-pathErr :: (FilePath -> IO Bool)
-        -> String
-        -> FilePath
-        -> Script FilePath
-pathErr test err path = do
-    b <- scriptIO $ test path
-    if b
-       then right path
-       else left $ err ++ show path
 
 --
 -- -- Server stuff --
@@ -83,6 +84,6 @@ startServer sock dir = do
 -- -- Browser stuff --
 --
 
-runBrowser :: PortNumber -> IO ()
-runBrowser port = callProcess Config.browserExecutablePath [url]
+runBrowser :: FilePath -> PortNumber -> IO ()
+runBrowser browser port = callProcess browser [url]
   where url = "http://localhost:" ++ show port ++ "/index.html"
